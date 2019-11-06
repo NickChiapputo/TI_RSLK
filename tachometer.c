@@ -1,8 +1,24 @@
 #include <ti\devices\msp432p4xx\driverlib\driverlib.h>  // Driver library
 #include <tachometer.h>
 
-void initTachometers()
+#define LEFT_MOTOR		0
+#define RIGHT_MOTOR		1
+#define MOTOR_FORWARD	1
+#define MOTOR_STOP		0
+#define MOTOR_BACKWARD	-1
+
+volatile int leftTacho_timerCount = 0;
+volatile int leftTacho_direction = MOTOR_FORWARD;
+
+volatile int rightTacho_timerCount = 0;
+volatile int rightTacho_direction = MOTOR_FORWARD;
+
+int clockSMCLK;
+
+void initTachometers( int clockSMCLK )
 {
+	clockSMCLK = clockSMCLK;
+
 	Timer_A_ContinuousModeConfig Timer_A_config =
 	{
 			TIMER_A_CLOCKSOURCE_SMCLK,  //3MHz
@@ -50,4 +66,80 @@ void initTachometers()
 
 	Interrupt_enableInterrupt(INT_TA3_0);
 	Interrupt_enableInterrupt(INT_TA3_N);
+}
+
+void startTacho()
+{
+	Timer_A_startCounter( TIMER_A3_BASE, TIMER_A_CONTINUOUS_MODE );
+}
+
+int getTachoDirection( int motorSel )
+{
+	return motorSel == LEFT_MOTOR ? leftTacho_direction : rightTacho_direction;
+}
+
+float getSpeed( int motorSel )
+{
+	// speed in RPM = [ 60 / ( 360 * pulsePeriod ) ] * ( clockSMCLK / 5 )
+	//				= [ 1 / ( 6 * pulsePeriod ) ] * ( clockSMCLK / 5 )
+	//				= clockSMCLK / ( 30 * pulsePeriod )
+	//				= 100kHz / pulsePeriod
+	return clockSMCLK / ( 30 * ( motorSel == LEFT_MOTOR ? leftTacho_timerCount : rightTacho_timerCount ) );
+}
+
+//Left tachometer pulse period measurement
+void TA3_N_IRQHandler(void)
+{
+	static uint_fast16_t lastCount = 0, currentCount = 0;
+
+	Timer_A_clearCaptureCompareInterrupt(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);
+
+	currentCount = Timer_A_getCaptureCompareCount(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);
+
+	leftTacho_timerCount = currentCount - lastCount;
+	if(leftTacho_timerCount < 0)
+	{
+		leftTacho_timerCount += 0xFFFF;
+	}
+
+	lastCount = currentCount;
+
+	//P5.2: 1 for forward, 0 for backward
+	if(GPIO_getInputPinValue(GPIO_PORT_P5, GPIO_PIN2))
+	{
+		leftTacho_direction = MOTOR_FORWARD;
+	}
+	else
+	{
+		leftTacho_direction = MOTOR_BACKWARD;
+	}
+}
+
+
+//Right tachometer pulse period measurement
+void TA3_0_IRQHandler(void)
+{
+	static uint_fast16_t lastCount = 0, currentCount = 0;
+
+	Timer_A_clearCaptureCompareInterrupt(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_0);
+
+	currentCount = Timer_A_getCaptureCompareCount(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_0);
+
+	rightTacho_timerCount = currentCount - lastCount;
+	if(rightTacho_timerCount < 0)
+	{
+		rightTacho_timerCount += 0xFFFF;
+	}
+
+	lastCount = currentCount;
+
+	//P5.0: 1 for forward, 0 for backward
+	if(GPIO_getInputPinValue(GPIO_PORT_P5, GPIO_PIN0))
+	{
+		rightTacho_direction = MOTOR_FORWARD;
+	}
+	else
+	{
+		rightTacho_direction = MOTOR_BACKWARD;
+	}
 }

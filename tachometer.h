@@ -2,7 +2,8 @@
 #define TACHOMETER_H_
 
 void initTachometers();
-int getDirection( int )
-float getSpeed( int, int );
+void startTacho();
+int getTachoDirection( int );
+float getSpeed( int );
 
 #endif /* TACHOMETER_H_ */
