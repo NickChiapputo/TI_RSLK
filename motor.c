@@ -198,7 +198,7 @@ int getPWM( int motorSel )
 	return motorSel == LEFT_MOTOR ? leftMotor_dutyCycle : rightMotor_dutyCycle;
 }
 
-int getDirection( int motorSel )
+int getMotorDirection( int motorSel )
 {
 	return motorSel == LEFT_MOTOR ? leftMotor_direction : rightMotor_direction;
 }

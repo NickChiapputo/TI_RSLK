@@ -11,6 +11,6 @@ void startMotor( int );
 static setPWM( int, int );
 static setDirection( int, int );
 int getPWM( int );
-int getDirection( int );
+int getMotorDirection( int );
 
 #endif /* MOTOR_H_ */

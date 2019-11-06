@@ -5,25 +5,17 @@
 #include <ti\devices\msp432p4xx\driverlib\driverlib.h>  // Driver library
 #include <motor.h>
 #include <tachometer.h>
+#include <bumpSensors.h>
 
 
 #define CLOCK_HF    48000000 //48MHz
 #define CLOCK_LF    32000 //32kHz
 
 #define HEARTBEAT_FREQ    2  //unit: Hz, heart beat LED blinking frequency for debugging
-#define SYSTICK_FREQ    		200			// Hz
 
 #define RED_LED 	GPIO_PIN0  //heart beat LED
 #define GREEN_LED	GPIO_PIN1
 #define BLUE_LED	GPIO_PIN2
-
-#define BUMP0    GPIO_PIN0  //right side of robot
-#define BUMP1    GPIO_PIN2
-#define BUMP2    GPIO_PIN3
-#define BUMP3    GPIO_PIN5
-#define BUMP4    GPIO_PIN6
-#define BUMP5    GPIO_PIN7  //left side of robot
-#define NUM_DEBOUNCE_CHECKS 10	// For 50 ms debounce time.
 
 #define LEFT_MOTOR    0
 #define RIGHT_MOTOR    1
@@ -39,11 +31,7 @@
 void initDevice_HFXT();
 void initHeartBeatLED();
 void initDebugUART();
-void initTimer();
 void initBumpSensors();
-void initTachometers();
-
-float getSpeed( int );
 
 void uart0_transmitStr(const char *str);
 
@@ -51,17 +39,6 @@ void uart0_transmitStr(const char *str);
 //Global variables
 uint32_t clockMCLK, clockSMCLK;
 uint8_t currentLED = RED_LED;
-
-volatile uint_fast16_t bumpStatus = 0;
-volatile uint_fast16_t bumpPress = 0;
-volatile uint32_t bumpButton;
-volatile uint32_t buttonStateIndex;
-
-volatile int leftTacho_timerCount = 0;
-volatile int leftTacho_direction = MOTOR_FORWARD;
-
-volatile int rightTacho_timerCount = 0;
-volatile int rightTacho_direction = MOTOR_FORWARD;
 
 char strBuffer[MAX_STR_BUFFER_LEN];
 
@@ -84,16 +61,15 @@ void main(void)
 	initDevice_HFXT();
 	initHeartBeatLED();
 	initDebugUART();
-	initTimer();
 	initMotors( clockSMCLK );
-	initBumpSensors();
-	initTachometers();
+	initBumpSensors( clockMCLK );
+	initTachometers( clockSMCLK );
 
 	Interrupt_enableMaster();
 	Timer32_startTimer(TIMER32_0_BASE, false);
 
 	// Start timer for tachometer speed measurements
-	Timer_A_startCounter( TIMER_A3_BASE, TIMER_A_CONTINUOUS_MODE );
+	startTacho();
 
 	//Initial display on terminal.
 	for(i=0; i<NUM_DISP_TEXT_LINE; i++)
@@ -129,7 +105,7 @@ void main(void)
 					switchDirection( LEFT_MOTOR );
 					switchDirection( RIGHT_MOTOR );
 
-					sprintf( str, "Change motor direction: %i, %i.\r\n> ", getDirection( LEFT_MOTOR ), getDirection( RIGHT_MOTOR ) );
+					sprintf( str, "Change motor direction: %i, %i.\r\n> ", getMotorDirection( LEFT_MOTOR ), getMotorDirection( RIGHT_MOTOR ) );
 					uart0_transmitStr( str );
 					break;
 
@@ -153,21 +129,20 @@ void main(void)
 				case 'V':
 				case 'v':
 					sprintf( str, "Left RPS = %.1f\r\nLeft Direction = %d\r\nRight RPS = %.1f\r\nRight Direction = %d\r\n\n",
-							 getSpeed( leftTacho_timerCount ) / 60, leftTacho_direction,
-							 getSpeed( rightTacho_timerCount ) / 60, rightTacho_direction);
+							 getSpeed( LEFT_MOTOR ) / 60, getTachoDirection( LEFT_MOTOR ),
+							 getSpeed( RIGHT_MOTOR ) / 60, getTachoDirection( RIGHT_MOTOR ) );
 					uart0_transmitStr(str);
 					break;
 			} //end of switch
 		} //end of if
 
 		// Calls when a bump button is pressed.
-		if( bumpPress )
+		if( bumpStateSet() )
 		{
-			// Check if bump button is still pressed.
-			uint8_t buttonState = GPIO_getInputPinValue( GPIO_PORT_P4, bumpButton );
-			if( buttonState )
+			// Check if bump button is still pressed
+			int bumpState = checkBumpState();
+			if( bumpState == 0 )
 			{
-				bumpPress = 0;
 				uart0_transmitStr( "Button released.\r\n\n" );
 
 				// Restart motors
@@ -176,6 +151,10 @@ void main(void)
 			}
 			else
 			{
+				char str[ 100 ];
+				sprintf( str, "Bump triggered: %i\r\n", bumpState );
+				uart0_transmitStr( str );
+
 				// Stop motors while bump sensor is active
 				pauseMotor( LEFT_MOTOR );
 				pauseMotor( RIGHT_MOTOR );
@@ -248,36 +227,6 @@ void initDebugUART(void)
 	UART_enableModule(EUSCI_A0_BASE);
 }
 
-void initTimer()
-{
-	// Set the SysTick period so that debouncing for the bump sensors can be executed
-	SysTick_setPeriod( clockMCLK / SYSTICK_FREQ - 1 );
-}
-
-float getSpeed( int timerCount )
-{
-	//pulsePeriod = timerCount/timerClockFreq
-	//speed (RPM) = 60/(360*pulsePeriod)
-	//Hard-coded for Timer_A frequency 3MHz/5 = 600kHz.
-
-	// speed in RPM = [ 60 / ( 360 * pulsePeriod ) ] * 600kHz
-	//				= [ 1 / ( 6 * pulsePeriod ) ] * 600kHz
-	//				= 600kHz / ( 6 * pulsePeriod )
-	//				= 100kHz / pulsePeriod
-	return 100000.0 / timerCount;
-}
-
-void initBumpSensors()
-{
-	GPIO_setAsInputPinWithPullUpResistor( GPIO_PORT_P4, BUMP0 | BUMP1 | BUMP2 | BUMP3 | BUMP4 | BUMP5 );
-
-	// Set any of the bump buttons to trigger interrupt on falling edge (when pressed)
-	GPIO_enableInterrupt( GPIO_PORT_P4, BUMP0 | BUMP1 | BUMP2 | BUMP3 | BUMP4 | BUMP5 );
-	GPIO_interruptEdgeSelect( GPIO_PORT_P4, BUMP0 | BUMP1 | BUMP2 | BUMP3 | BUMP4 | BUMP5, GPIO_HIGH_TO_LOW_TRANSITION );
-
-	Interrupt_enableInterrupt( INT_PORT4 );
-}
-
 //Transmit a string through UART0.
 void uart0_transmitStr(const char *str)
 {
@@ -304,111 +253,5 @@ void T32_INT1_IRQHandler(void)
 	else
 	{
 		GPIO_setOutputHighOnPin(GPIO_PORT_P2, currentLED);
-	}
-}
-
-void PORT4_IRQHandler()
-{
-	bumpStatus = GPIO_getEnabledInterruptStatus( GPIO_PORT_P4 );
-	GPIO_clearInterruptFlag( GPIO_PORT_P4, bumpStatus );
-
-	// Determine which button is pressed
-	bumpButton = ( bumpStatus & BUMP0 ) ? BUMP0 :
-				( bumpStatus & BUMP1 ) ? BUMP1 :
-				( bumpStatus & BUMP2 ) ? BUMP2 :
-				( bumpStatus & BUMP3 ) ? BUMP3 :
-				( bumpStatus & BUMP4 ) ? BUMP4 : BUMP5;
-
-	// Start SysTick for debouncing the button press(es)
-	buttonStateIndex = 0;
-	SysTick->VAL = 0;
-	SysTick_enableModule();
-	SysTick_enableInterrupt();
-}
-
-void SysTick_Handler()
-{
-	// Since buttons are configured with pull-up resistor, the pin value is 0 when pressed
-	uint8_t buttonState = GPIO_getInputPinValue( GPIO_PORT_P4, bumpButton );
-	buttonState = bumpButton & ( ~buttonState );
-	buttonStateIndex++;
-
-	if( ( buttonState & bumpButton ) == 0 )
-	{
-		SysTick_disableInterrupt();
-		SysTick_disableModule();
-	}
-	else if( buttonStateIndex >= NUM_DEBOUNCE_CHECKS )
-	{
-		// Button is confirmed pressed
-		SysTick_disableInterrupt();
-		SysTick_disableModule();
-
-		bumpPress = 1;
-
-		char str[ 100 ];
-		sprintf( str, "Bump triggered: %s\r\n", ( bumpStatus & BUMP0 ) ? "BUMP0" :
-				( bumpStatus & BUMP1 ) ? "BUMP1" :
-				( bumpStatus & BUMP2 ) ? "BUMP2" :
-				( bumpStatus & BUMP3 ) ? "BUMP3" :
-				( bumpStatus & BUMP4 ) ? "BUMP4" : "BUMP5" );
-		uart0_transmitStr( str );
-	}
-}
-
-//Left tachometer pulse period measurement
-void TA3_N_IRQHandler(void)
-{
-	static uint_fast16_t lastCount = 0, currentCount = 0;
-
-	Timer_A_clearCaptureCompareInterrupt(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);
-
-	currentCount = Timer_A_getCaptureCompareCount(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);
-
-	leftTacho_timerCount = currentCount - lastCount;
-	if(leftTacho_timerCount < 0)
-	{
-		leftTacho_timerCount += 0xFFFF;
-	}
-
-	lastCount = currentCount;
-
-	//P5.2: 1 for forward, 0 for backward
-	if(GPIO_getInputPinValue(GPIO_PORT_P5, GPIO_PIN2))
-	{
-		leftTacho_direction = MOTOR_FORWARD;
-	}
-	else
-	{
-		leftTacho_direction = MOTOR_BACKWARD;
-	}
-}
-
-
-//Right tachometer pulse period measurement
-void TA3_0_IRQHandler(void)
-{
-	static uint_fast16_t lastCount = 0, currentCount = 0;
-
-	Timer_A_clearCaptureCompareInterrupt(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_0);
-
-	currentCount = Timer_A_getCaptureCompareCount(TIMER_A3_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_0);
-
-	rightTacho_timerCount = currentCount - lastCount;
-	if(rightTacho_timerCount < 0)
-	{
-		rightTacho_timerCount += 0xFFFF;
-	}
-
-	lastCount = currentCount;
-
-	//P5.0: 1 for forward, 0 for backward
-	if(GPIO_getInputPinValue(GPIO_PORT_P5, GPIO_PIN0))
-	{
-		rightTacho_direction = MOTOR_FORWARD;
-	}
-	else
-	{
-		rightTacho_direction = MOTOR_BACKWARD;
 	}
 }
