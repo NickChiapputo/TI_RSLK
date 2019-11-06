@@ -1,66 +1,43 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdbool.h>
 #include <stdint.h>  //Exact-width integer types
 #include <ti\devices\msp432p4xx\driverlib\driverlib.h>  // Driver library
 #include <motor.h>
 #include <tachometer.h>
 #include <bumpSensors.h>
+#include <uart.h>
 
+#define CLOCK_HF		48000000 	// 48MHz
+#define CLOCK_LF		32000 		// 32kHz
 
-#define CLOCK_HF    48000000 //48MHz
-#define CLOCK_LF    32000 //32kHz
+#define HEARTBEAT_FREQ	2  			// unit: Hz, heart beat LED blinking frequency for debugging
 
-#define HEARTBEAT_FREQ    2  //unit: Hz, heart beat LED blinking frequency for debugging
+#define RED_LED 		GPIO_PIN0  // heart beat LED
+#define GREEN_LED		GPIO_PIN1
+#define BLUE_LED		GPIO_PIN2
 
-#define RED_LED 	GPIO_PIN0  //heart beat LED
-#define GREEN_LED	GPIO_PIN1
-#define BLUE_LED	GPIO_PIN2
+#define LEFT_MOTOR		0
+#define RIGHT_MOTOR		1
 
-#define LEFT_MOTOR    0
-#define RIGHT_MOTOR    1
-
-#define MOTOR_FORWARD    1
-#define MOTOR_STOP    0
-#define MOTOR_BACKWARD    -1
-
-#define NUM_DISP_TEXT_LINE    5
-#define MAX_STR_BUFFER_LEN    200
-
-//Function prototypes
 void initDevice_HFXT();
 void initHeartBeatLED();
-void initDebugUART();
-void initBumpSensors();
 
-void uart0_transmitStr(const char *str);
-
-
-//Global variables
 uint32_t clockMCLK, clockSMCLK;
 uint8_t currentLED = RED_LED;
 
-char strBuffer[MAX_STR_BUFFER_LEN];
-
-const char *terminalDisplayText[NUM_DISP_TEXT_LINE] =
-{
-	"\r\n",
-	"TI-RSLK MAX Motor Control Demo\r\n",
-	"  C: Change LED Color, L: Left Motor, R: Right Motor, S: Change Direction\r\n",
-	"  I: Increase DutyCycle, D: Decrease DutyCycle, V: Display Speed, H: Help\r\n",
-	"> "
-};
-
+const char *terminalDisplayText = 	"\r\nTI-RSLK MAX Motor Control Demo\r\n"
+									"  C: Change LED Color, L: Left Motor, R: Right Motor, S: Change Direction\r\n"
+									"  I: Increase DutyCycle, D: Decrease DutyCycle, V: Display Speed, H: Help\r\n"
+									"> ";
 
 void main(void)
 {
-	int i;
 	char str[ 100 ];
 	uint8_t data;
 
 	initDevice_HFXT();
 	initHeartBeatLED();
-	initDebugUART();
+	initUART();
 	initMotors( clockSMCLK );
 	initBumpSensors( clockMCLK );
 	initTachometers( clockSMCLK );
@@ -72,10 +49,7 @@ void main(void)
 	startTacho();
 
 	//Initial display on terminal.
-	for(i=0; i<NUM_DISP_TEXT_LINE; i++)
-	{
-		uart0_transmitStr(terminalDisplayText[i]);
-	}
+	uart0_transmitStr( terminalDisplayText );
 
 	while(1)
 	{
@@ -94,10 +68,7 @@ void main(void)
 
 				case 'H':
 				case 'h':
-					for(i=0; i<NUM_DISP_TEXT_LINE; i++)
-					{
-						uart0_transmitStr(terminalDisplayText[i]);
-					}
+					uart0_transmitStr( terminalDisplayText );
 					break;
 
 				case 'S':
@@ -202,56 +173,13 @@ void initHeartBeatLED(void)
 	Interrupt_enableInterrupt(INT_T32_INT1); // Enable Timer32_0 interrupt in the interrupt controller.
 }
 
-void initDebugUART(void)
-{
-	// Configuration for 3MHz SMCLK, 9600 baud rate.
-	// Calculated using the online calculator that TI provides at:
-	// http://software-dl.ti.com/msp430/msp430_public_sw/mcu/msp430/MSP430BaudRateConverter/index.html
-	const eUSCI_UART_Config config =
-	{
-		EUSCI_A_UART_CLOCKSOURCE_SMCLK, //SMCLK Clock Source
-		19, //BRDIV = 19
-		8, //UCxBRF = 8
-		0, //UCxBRS = 0
-		EUSCI_A_UART_NO_PARITY, //No Parity
-		EUSCI_A_UART_LSB_FIRST, //MSB First
-		EUSCI_A_UART_ONE_STOP_BIT, //One stop bit
-		EUSCI_A_UART_MODE, //UART mode
-		EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION //Oversampling
-	};
-
-	//Configure GPIO pins for UART. RX: P1.2, TX:P1.3.
-	GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P1, GPIO_PIN2|GPIO_PIN3, GPIO_PRIMARY_MODULE_FUNCTION);
-
-	UART_initModule(EUSCI_A0_BASE, &config);
-	UART_enableModule(EUSCI_A0_BASE);
-}
-
-//Transmit a string through UART0.
-void uart0_transmitStr(const char *str)
-{
-	int len, i=0;
-
-	len = strlen(str);
-	while(i < len)
-	{
-		UART_transmitData(EUSCI_A0_BASE, str[i++]);
-		while(!UART_getInterruptStatus(EUSCI_A0_BASE, EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG));
-		UART_clearInterruptFlag(EUSCI_A0_BASE, EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG);
-	}
-}
-
 //Timer32_0 ISR
 void T32_INT1_IRQHandler(void)
 {
 	Timer32_clearInterruptFlag(TIMER32_0_BASE);
 
 	if(GPIO_getInputPinValue(GPIO_PORT_P2, RED_LED|GREEN_LED|BLUE_LED))
-	{
 		GPIO_setOutputLowOnPin(GPIO_PORT_P2, RED_LED|GREEN_LED|BLUE_LED);
-	}
 	else
-	{
 		GPIO_setOutputHighOnPin(GPIO_PORT_P2, currentLED);
-	}
 }
