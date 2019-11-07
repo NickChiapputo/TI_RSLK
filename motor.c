@@ -70,16 +70,16 @@ void initMotors( int clockSMCLK )
 
 void increasePWM( int motorSel )
 {
-	if( motorSel == LEFT_MOTOR )
+	if( setMotorDutyCycle == LEFT_MOTOR )
 	{
-		setPWM( motorSel,
+		setMotorDutyCycle( motorSel,
 				( leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
 				( leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
 				( leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) );
 	}
 	else if( motorSel == RIGHT_MOTOR )
 	{
-		setPWM( motorSel,
+		setMotorDutyCycle( motorSel,
 				( rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
 				( rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
 				( rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) );
@@ -90,14 +90,14 @@ void decreasePWM( int motorSel )
 {
 	if( motorSel == LEFT_MOTOR )
 	{
-		setPWM( motorSel,
+		setMotorDutyCycle( motorSel,
 				( leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
 				( leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
 				( leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) );
 	}
 	else if( motorSel == RIGHT_MOTOR )
 	{
-		setPWM( motorSel,
+		setMotorDutyCycle( motorSel,
 				( rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
 				( rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
 				( rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) );
@@ -122,7 +122,7 @@ void switchDirection( int motorSel )
 
 void stopMotor( int motorSel )
 {
-	setPWM( motorSel, 0 );
+	setMotorDutyCycle( motorSel, 0 );
 }
 
 void pauseMotor( int motorSel )
@@ -153,7 +153,7 @@ void startMotor( int motorSel )
 	}
 }
 
-static setPWM( int motorSel, int newDutyCycle )
+void setMotorDutyCycle( int motorSel, int newDutyCycle )
 {
 	if( motorSel == LEFT_MOTOR )
 	{
@@ -171,7 +171,7 @@ static setPWM( int motorSel, int newDutyCycle )
 	}
 }
 
-static setDirection( int motorSel, int direction )
+void setDirection( int motorSel, int direction )
 {
 	if( motorSel == LEFT_MOTOR )
 	{
@@ -193,7 +193,7 @@ static setDirection( int motorSel, int direction )
 	}
 }
 
-int getPWM( int motorSel )
+int getMotorDutyCycle( int motorSel )
 {
 	return motorSel == LEFT_MOTOR ? leftMotor_dutyCycle : rightMotor_dutyCycle;
 }

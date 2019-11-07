@@ -8,9 +8,9 @@ void switchDirection( int );
 void stopMotor( int );
 void pauseMotor( int );
 void startMotor( int );
-static setPWM( int, int );
-static setDirection( int, int );
-int getPWM( int );
+void setMotorDutyCycle( int, int );
+void setDirection( int, int );
+int getMotorDutyCycle( int );
 int getMotorDirection( int );
 
 #endif /* MOTOR_H_ */

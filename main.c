@@ -85,7 +85,7 @@ void main(void)
 					increasePWM( LEFT_MOTOR );
 					increasePWM( RIGHT_MOTOR );
 
-					sprintf( str, "Increase PWM duty cycle: %i, %i.\r\n> ", getPWM( LEFT_MOTOR ), getPWM( RIGHT_MOTOR ) );
+					sprintf( str, "Increase PWM duty cycle: %i, %i.\r\n> ", getMotorDutyCycle( LEFT_MOTOR ), getMotorDutyCycle( RIGHT_MOTOR ) );
 					uart0_transmitStr( str );
 					break;
 
@@ -94,7 +94,7 @@ void main(void)
 					decreasePWM( LEFT_MOTOR );
 					decreasePWM( RIGHT_MOTOR );
 
-					sprintf( str, "Decrease PWM duty cycle: %i, %i.\r\n> ", getPWM( LEFT_MOTOR ), getPWM( RIGHT_MOTOR ) );
+					sprintf( str, "Decrease PWM duty cycle: %i, %i.\r\n> ", getMotorDutyCycle( LEFT_MOTOR ), getMotorDutyCycle( RIGHT_MOTOR ) );
 					uart0_transmitStr( str );
 					break;
 				case 'V':
