@@ -18,6 +18,9 @@
 
 #define LEFT_MOTOR		0
 #define RIGHT_MOTOR		1
+#define MOTOR_FORWARD	1
+#define MOTOR_STOP		0
+#define MOTOR_BACKWARD	-1
 
 void initDevice_HFXT();
 void initHeartBeatLED();
@@ -107,7 +110,7 @@ void main(void)
 			} //end of switch
 		} //end of if
 
-		// Calls when a bump button is pressed.
+		// True when a bump button is pressed.
 		if( bumpStateSet() )
 		{
 			// Check if bump button is still pressed
@@ -117,8 +120,26 @@ void main(void)
 				uart0_transmitStr( "Button released.\r\n\n" );
 
 				// Restart motors
-				startMotor( LEFT_MOTOR );
-				startMotor( RIGHT_MOTOR );
+				//startMotor( LEFT_MOTOR );
+				//startMotor( RIGHT_MOTOR );
+
+				// Turn away from wall example
+				// Save previous duty cycles
+				int tempLeft = getMotorDutyCycle( LEFT_MOTOR );
+				int tempRight = getMotorDutyCycle( RIGHT_MOTOR );
+
+				// Turn to the left by stopping the left motor and turning on the right motor
+				setMotorDutyCycle( LEFT_MOTOR, 0 );
+				setMotorDutyCycle( RIGHT_MOTOR, 30 );
+
+				// Wait a bit as it turns away from the wall.
+				// This should be done with a timer with period set relative to the tachometer reading.
+				int i = 0;
+				for( i = 0; i < 1000000; i++ );
+
+				// Set motors back to previous state
+				setMotorDutyCycle( LEFT_MOTOR, tempLeft );
+				setMotorDutyCycle( RIGHT_MOTOR, tempRight );
 			}
 			else
 			{
@@ -127,6 +148,23 @@ void main(void)
 				uart0_transmitStr( str );
 
 				// Stop motors while bump sensor is active
+				//pauseMotor( LEFT_MOTOR );
+				//pauseMotor( RIGHT_MOTOR );
+
+				// Move away from wall
+				setMotorDirection( LEFT_MOTOR, MOTOR_BACKWARD );
+				setMotorDirection( RIGHT_MOTOR, MOTOR_BACKWARD );
+
+				// Wait just a second while it moves away from the wall
+				int i = 0;
+				for( i = 0; i < 1000000; i++ );
+
+				// Reset motor direction
+				setMotorDirection( LEFT_MOTOR, MOTOR_FORWARD );
+				setMotorDirection( RIGHT_MOTOR, MOTOR_FORWARD );
+
+				// Pause motors until button is released.
+				// In practical application, a turn could be added after the motor is restarted
 				pauseMotor( LEFT_MOTOR );
 				pauseMotor( RIGHT_MOTOR );
 			}
