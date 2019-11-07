@@ -1,5 +1,6 @@
 #include <ti\devices\msp432p4xx\driverlib\driverlib.h>  // Driver library
 #include <motor.h>
+#include <stdio.h>
 
 #define PWM_FREQ    1000 //unit: Hz
 #define PWM_DUTYCYCLE_MIN    0 //unit: percent
@@ -70,19 +71,13 @@ void initMotors( int clockSMCLK )
 
 void increasePWM( int motorSel )
 {
-	if( setMotorDutyCycle == LEFT_MOTOR )
+	if( motorSel == LEFT_MOTOR )
 	{
-		setMotorDutyCycle( motorSel,
-				( leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
-				( leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
-				( leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) );
+		setMotorDutyCycle( motorSel, leftMotor_dutyCycle + PWM_DUTYCYCLE_STEP );
 	}
 	else if( motorSel == RIGHT_MOTOR )
 	{
-		setMotorDutyCycle( motorSel,
-				( rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
-				( rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
-				( rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP ) );
+		setMotorDutyCycle( motorSel, rightMotor_dutyCycle + PWM_DUTYCYCLE_STEP );
 	}
 }
 
@@ -90,17 +85,11 @@ void decreasePWM( int motorSel )
 {
 	if( motorSel == LEFT_MOTOR )
 	{
-		setMotorDutyCycle( motorSel,
-				( leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
-				( leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
-				( leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) );
+		setMotorDutyCycle( motorSel, leftMotor_dutyCycle - PWM_DUTYCYCLE_STEP );
 	}
 	else if( motorSel == RIGHT_MOTOR )
 	{
-		setMotorDutyCycle( motorSel,
-				( rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
-				( rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN :
-				( rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP ) );
+		setMotorDutyCycle( motorSel, rightMotor_dutyCycle - PWM_DUTYCYCLE_STEP );
 	}
 }
 
@@ -108,13 +97,13 @@ void switchDirection( int motorSel )
 {
 	if( motorSel == LEFT_MOTOR )
 	{
-		setDirection( motorSel,
+		setMotorDirection( motorSel,
 						leftMotor_direction == MOTOR_FORWARD ? MOTOR_BACKWARD :
 						leftMotor_direction == MOTOR_BACKWARD ? MOTOR_FORWARD : MOTOR_STOP );
 	}
 	else if( motorSel == RIGHT_MOTOR )
 	{
-		setDirection( motorSel,
+		setMotorDirection( motorSel,
 						rightMotor_direction == MOTOR_FORWARD ? MOTOR_BACKWARD :
 						rightMotor_direction == MOTOR_BACKWARD ? MOTOR_FORWARD : MOTOR_STOP );
 	}
@@ -157,21 +146,25 @@ void setMotorDutyCycle( int motorSel, int newDutyCycle )
 {
 	if( motorSel == LEFT_MOTOR )
 	{
-		leftMotor_dutyCycle = newDutyCycle;
+		leftMotor_dutyCycle = newDutyCycle > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
+								newDutyCycle < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN : newDutyCycle;
+
 		Timer_A_setCompareValue( TIMER_A0_BASE,
 									TIMER_A_CAPTURECOMPARE_REGISTER_4,
 									clockSMCLK / ( 3 * PWM_FREQ ) / 100 * leftMotor_dutyCycle );
 	}
 	else if( motorSel == RIGHT_MOTOR )
 	{
-		rightMotor_dutyCycle = newDutyCycle;
+		rightMotor_dutyCycle = newDutyCycle > PWM_DUTYCYCLE_MAX ? PWM_DUTYCYCLE_MAX :
+				newDutyCycle < PWM_DUTYCYCLE_MIN ? PWM_DUTYCYCLE_MIN : newDutyCycle;
+
 		Timer_A_setCompareValue( TIMER_A0_BASE,
 									TIMER_A_CAPTURECOMPARE_REGISTER_3,
 									clockSMCLK / ( 3 * PWM_FREQ ) / 100 * rightMotor_dutyCycle );
 	}
 }
 
-void setDirection( int motorSel, int direction )
+void setMotorDirection( int motorSel, int direction )
 {
 	if( motorSel == LEFT_MOTOR )
 	{

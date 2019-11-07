@@ -15,6 +15,8 @@ volatile uint_fast16_t bumpPress = 0;	// Represents whether a button is being pr
 volatile uint32_t bumpButton;			// Last pressed button
 volatile uint32_t buttonStateIndex;		// Used to control debouncing. Counts number of times SysTick_Handler is called. Max value is NUM_DEBOUNCE_CHECKS
 int clockMCLK;							// Frequency of the MCLK
+int bumpStates[ 6 ] = {0};				// Bump states used to tell which buttons are currently pressed
+int bumpButtonList[ 6 ] = { BUMP0, BUMP1, BUMP2, BUMP3, BUMP4, BUMP5 };
 
 void initBumpSensors( int clockMCLK )
 {
@@ -39,18 +41,16 @@ int bumpStateSet()
 
 int checkBumpState()
 {
-	uint8_t bumpState = GPIO_getInputPinValue( GPIO_PORT_P4, bumpButton );
-	if( bumpState )
+	//uint8_t bumpState;
+	int i;
+	for( i = 0; i < 6; i++ )
 	{
-		bumpPress = 0;
-		return 0;
+		if( !GPIO_getInputPinValue( GPIO_PORT_P4, bumpButtonList[ i ] ) )
+			return i + 1;
 	}
 
-	return ( bumpStatus & BUMP0 ) ? 1 :
-			( bumpStatus & BUMP1 ) ? 2 :
-			( bumpStatus & BUMP2 ) ? 3 :
-			( bumpStatus & BUMP3 ) ? 4 :
-			( bumpStatus & BUMP4 ) ? 5 : 6 ;
+	bumpPress = 0;
+	return 0;
 }
 
 void PORT4_IRQHandler()

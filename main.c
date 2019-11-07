@@ -120,9 +120,10 @@ void main(void)
 				uart0_transmitStr( "Button released.\r\n\n" );
 
 				// Restart motors
-				//startMotor( LEFT_MOTOR );
-				//startMotor( RIGHT_MOTOR );
+				startMotor( LEFT_MOTOR );
+				startMotor( RIGHT_MOTOR );
 
+				/*
 				// Turn away from wall example
 				// Save previous duty cycles
 				int tempLeft = getMotorDutyCycle( LEFT_MOTOR );
@@ -140,6 +141,7 @@ void main(void)
 				// Set motors back to previous state
 				setMotorDutyCycle( LEFT_MOTOR, tempLeft );
 				setMotorDutyCycle( RIGHT_MOTOR, tempRight );
+				*/
 			}
 			else
 			{
@@ -148,9 +150,11 @@ void main(void)
 				uart0_transmitStr( str );
 
 				// Stop motors while bump sensor is active
-				//pauseMotor( LEFT_MOTOR );
-				//pauseMotor( RIGHT_MOTOR );
+				pauseMotor( LEFT_MOTOR );
+				pauseMotor( RIGHT_MOTOR );
 
+
+				/*
 				// Move away from wall
 				setMotorDirection( LEFT_MOTOR, MOTOR_BACKWARD );
 				setMotorDirection( RIGHT_MOTOR, MOTOR_BACKWARD );
@@ -167,6 +171,7 @@ void main(void)
 				// In practical application, a turn could be added after the motor is restarted
 				pauseMotor( LEFT_MOTOR );
 				pauseMotor( RIGHT_MOTOR );
+				*/
 			}
 		}
 	} //end of while

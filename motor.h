@@ -9,7 +9,7 @@ void stopMotor( int );
 void pauseMotor( int );
 void startMotor( int );
 void setMotorDutyCycle( int, int );
-void setDirection( int, int );
+void setMotorDirection( int, int );
 int getMotorDutyCycle( int );
 int getMotorDirection( int );
 
