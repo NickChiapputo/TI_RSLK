@@ -20,11 +20,29 @@ void initUART()
 		EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION //Oversampling
 	};
 
+    const eUSCI_UART_Config configBT =
+    {
+        EUSCI_A_UART_CLOCKSOURCE_SMCLK, //SMCLK Clock Source
+        26, //BRDIV = 19
+        0, //UCxBRF = 8
+        0, //UCxBRS = 0
+        EUSCI_A_UART_NO_PARITY, //No Parity
+        EUSCI_A_UART_LSB_FIRST, //MSB First
+        EUSCI_A_UART_ONE_STOP_BIT, //One stop bit
+        EUSCI_A_UART_MODE, //UART mode
+        EUSCI_A_UART_LOW_FREQUENCY_BAUDRATE_GENERATION //!Oversampling
+    };
+
 	//Configure GPIO pins for UART. RX: P1.2, TX:P1.3.
 	GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P1, GPIO_PIN2|GPIO_PIN3, GPIO_PRIMARY_MODULE_FUNCTION);
 
 	UART_initModule(EUSCI_A0_BASE, &config);
 	UART_enableModule(EUSCI_A0_BASE);
+
+
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P3, GPIO_PIN2|GPIO_PIN3, GPIO_PRIMARY_MODULE_FUNCTION);
+    UART_initModule(EUSCI_A1_BASE, &configBT);
+    UART_enableModule(EUSCI_A1_BASE);
 }
 
 //Transmit a string through UART0.
@@ -39,4 +57,11 @@ void uart0_transmitStr( const char* str )
 		while( !UART_getInterruptStatus( EUSCI_A0_BASE, EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG ) );
 		UART_clearInterruptFlag( EUSCI_A0_BASE, EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG );
 	}
+}
+
+void uartBluetoothTransmit( uint8_t data )
+{
+    UART_transmitData( EUSCI_A1_BASE, data );
+    while( !UART_getInterruptStatus( EUSCI_A1_BASE, EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG ) );
+    UART_clearInterruptFlag( EUSCI_A1_BASE, EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG );
 }
