@@ -9,11 +9,11 @@
 
 #define CLOCK_HF		48000000 	// Hz
 #define CLOCK_LF		32000 		// Hz
-#define SAMPLE_FREQ		1000		// Hz. ADC can't take more than 24 MHz per sample. (P6.0 and P6.1 are each 1 sample). 50 Hz per sample is enough I think
+#define SAMPLE_FREQ		100			// Hz. Frequency to sample controller data
 
 #define HEARTBEAT_FREQ	2  			// unit: Hz, heart beat LED blinking frequency for debugging
 
-#define RED_LED 		GPIO_PIN0  // heart beat LED
+#define RED_LED 		GPIO_PIN0	// heart beat LED
 #define GREEN_LED		GPIO_PIN1
 #define BLUE_LED		GPIO_PIN2
 
@@ -23,30 +23,23 @@
 #define MOTOR_STOP		0
 #define MOTOR_BACKWARD	-1
 
+#define SPEED0			15
+#define SPEED1			30
+#define SPEED2			45
+#define SPEED3			60
+
 void initDevice_HFXT();
 void initHeartBeatLED();
 void initTimer();
-void initADC14();
 
 uint32_t clockMCLK, clockSMCLK, clockACLK;
 uint8_t currentLED = RED_LED;
-int backingUp = 0;
-
-const char *terminalDisplayText = 	"\r\nTI-RSLK MAX Motor Control Demo\r\n"
-									"  C: Change LED Color, S: Change Direction, I: Increase DutyCycle,\r\n"
-									"  D: Decrease DutyCycle, V: Display Speed, H: Help\r\n"
-									"> ";
 
 void main(void)
 {
-	char str[ 100 ];
-	uint8_t data;
-
 	initDevice_HFXT();
 	initHeartBeatLED();
-	initUART();
 	initTimer();
-	initADC14();
 	initMotors( clockSMCLK );
 	initBumpSensors( clockMCLK );
 	initTachometers( clockSMCLK );
@@ -57,57 +50,10 @@ void main(void)
 	// Start timer for tachometer speed measurements
 	startTacho();
 
-	//Initial display on terminal.
-	uart0_transmitStr( terminalDisplayText );
-
 	// Start duty cycle monitoring
 	Timer32_startTimer( TIMER32_1_BASE, false );
 
-	while(1)
-	{
-	    if(UART_getInterruptStatus( EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG ) )
-		{
-			data = UART_receiveData( EUSCI_A0_BASE);
-			UART_clearInterruptFlag( EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG );
-
-			switch(data)
-			{
-			    case 'H':
-				case 'h':
-					uart0_transmitStr( terminalDisplayText );
-					break;
-				case 'V':
-				case 'v':
-					sprintf( str, "Left RPS = %.1f\r\nLeft Direction = %d\r\nRight RPS = %.1f\r\nRight Direction = %d\r\n\n",
-							 getSpeed( LEFT_MOTOR ) / 60, getTachoDirection( LEFT_MOTOR ),
-							 getSpeed( RIGHT_MOTOR ) / 60, getTachoDirection( RIGHT_MOTOR ) );
-					uart0_transmitStr(str);
-					break;
-			} //end of switch
-		} //end of if
-
-		// True when a bump button is pressed.
-		if( bumpStateSet() )
-		{
-			// Check if bump button is still pressed
-			int bumpState = checkBumpState();
-			if( bumpState == 0 )
-			{
-				uart0_transmitStr( "Button released.\r\n\n" );
-
-				// Restart motors
-				startMotor( LEFT_MOTOR );
-				startMotor( RIGHT_MOTOR );
-			}
-			else
-			{
-				// Pause motors until button is released.
-				pauseMotor( LEFT_MOTOR );
-				pauseMotor( RIGHT_MOTOR );
-
-			}
-		}
-	} //end of while
+	while( 1 ) {}
 }
 
 void initDevice_HFXT()
@@ -133,39 +79,14 @@ void initDevice_HFXT()
 	clockSMCLK = CS_getSMCLK();
 }
 
-void initADC14()
-{
-    ADC14_enableModule();
-    ADC14_initModule( ADC_CLOCKSOURCE_SMCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_1, ADC_NOROUTE );
-
-	//Configure P6.1 as A14 and P6.0 as A15
-	GPIO_setAsPeripheralModuleFunctionInputPin( GPIO_PORT_P6, GPIO_PIN0 | GPIO_PIN1, GPIO_TERTIARY_MODULE_FUNCTION );
-    GPIO_setAsPeripheralModuleFunctionInputPin( GPIO_PORT_P4, GPIO_PIN0 | GPIO_PIN2, GPIO_TERTIARY_MODULE_FUNCTION );
-
-	// Configure non-repeating multi-sequence memory storage in registers 0 and 1
-	ADC14_configureMultiSequenceMode( ADC_MEM0, ADC_MEM3, false );
-
-	// Store P6.1 (A14) reading in MEM0 and P6.0 (A15) reading in MEM1
-	ADC14_configureConversionMemory( ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A14, false );
-	ADC14_configureConversionMemory( ADC_MEM1, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A15, false );
-    ADC14_configureConversionMemory( ADC_MEM2, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A13, false );
-    ADC14_configureConversionMemory( ADC_MEM3, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A11, false );
-
-    //See TechRef Section 20.2.6 for sample timing consideration.
-    ADC14_enableSampleTimer( ADC_MANUAL_ITERATION );
-    ADC14_setSampleHoldTime( ADC_PULSE_WIDTH_4, ADC_PULSE_WIDTH_4 );
-
-    ADC14_enableConversion();
-}
-
 void initHeartBeatLED()
 {
 	GPIO_setAsOutputPin( GPIO_PORT_P2, GPIO_PIN0 | GPIO_PIN1 | GPIO_PIN2 );
-//	GPIO_setAsInputPin( GPIO_PORT_P2, GPIO_PIN4 | GPIO_PIN5 | GPIO_PIN6 | GPIO_PIN7 );
 	GPIO_setAsInputPin( GPIO_PORT_P3, GPIO_PIN5 );
 	GPIO_setAsInputPin( GPIO_PORT_P5, GPIO_PIN0 | GPIO_PIN1 | GPIO_PIN2 );
 	GPIO_setAsInputPin( GPIO_PORT_P1, GPIO_PIN6 );
 	GPIO_setAsInputPin( GPIO_PORT_P2, GPIO_PIN3 );
+	GPIO_setAsInputPin( GPIO_PORT_P6, GPIO_PIN4 );
 }
 
 void initTimer()
@@ -191,65 +112,115 @@ void T32_INT1_IRQHandler()
 		GPIO_setOutputHighOnPin( GPIO_PORT_P2, currentLED );
 }
 
-int roundToNearestN( int x, int N )
-{
-    return x + ( x % N > ( N / 2 ) ? ( N - x % N ) : ( -1 * x % N ) );
-}
-
 void T32_INT2_IRQHandler()
 {
 	Timer32_clearInterruptFlag( TIMER32_1_BASE );
 
     // Read in control data
 	uint8_t enable = GPIO_getInputPinValue( GPIO_PORT_P1, GPIO_PIN6 );
-	uint8_t data0 = GPIO_getInputPinValue( GPIO_PORT_P5, GPIO_PIN2 );
+	uint8_t data0 = GPIO_getInputPinValue( GPIO_PORT_P6, GPIO_PIN4 );
 	uint8_t data1 = GPIO_getInputPinValue( GPIO_PORT_P3, GPIO_PIN5 );
 	uint8_t data2 = GPIO_getInputPinValue( GPIO_PORT_P5, GPIO_PIN1 );
 	uint8_t data3 = GPIO_getInputPinValue( GPIO_PORT_P2, GPIO_PIN3 );
 
-	char str[ 100 ];
-	sprintf( str, "%i %i %i %i %i         \r", enable, data0, data1, data2, data3 );
-	printf( "%i %i %i %i %i         \r", enable, data0, data1, data2, data3 );
-
-	uint8_t speed = 25;
+	// Check if bump sensors are triggered. Update bump state
+	checkBumpState();
 
 	if( enable )
 	{
-		if( data1 )
+		if( !data0 )
 		{
+			// Only forward or reverse
+
+			// 00	SPEED0
+			// 01	SPEED1
+			// 10	SPEED2
+			// 11	SPEED3
+			uint8_t speed = ( !data2 && !data3 ) ? SPEED0 :
+							( !data2 &&  data3 ) ? SPEED1 :
+							(  data2 && !data3 ) ? SPEED2 : SPEED3;
+
+			// 0	Forward
+			// 1	Reverse
+			uint8_t direction = data1 ? MOTOR_BACKWARD : MOTOR_FORWARD;
+
+			// Don't allow robot to move forward when a bump sensor is currently triggered (robot is against a wall)
+			if( bumpStateSet() && direction == MOTOR_FORWARD )
+				speed = 0;
+
 			setMotorDutyCycle( LEFT_MOTOR,  speed );
 			setMotorDutyCycle( RIGHT_MOTOR, speed );
 
-			setMotorDirection( LEFT_MOTOR,  MOTOR_FORWARD );
-			setMotorDirection( RIGHT_MOTOR, MOTOR_FORWARD );
+			setMotorDirection( LEFT_MOTOR,  direction );
+			setMotorDirection( RIGHT_MOTOR, direction );
 		}
-
-		if( data2 )
+		else if( !( data1 && data2 && data3 ) )
 		{
-			setMotorDutyCycle( LEFT_MOTOR,  speed );
-			setMotorDutyCycle( RIGHT_MOTOR, speed );
+			// Turning
 
-			setMotorDirection( LEFT_MOTOR,  MOTOR_FORWARD  );
-			setMotorDirection( RIGHT_MOTOR, MOTOR_BACKWARD );
+			uint8_t speedInside, speedOutside, speedL, speedR, directionL, directionR;
+
+			if( !data2 && !data3 )	// Tight turn, same speed for both motors
+			{
+				speedInside  = SPEED1;
+				speedOutside = SPEED1;
+			}
+			else if( data2 || data3 )	// Moving turn, higher speed for outside
+			{
+				speedInside  = SPEED1;
+				speedOutside = SPEED2;
+			}
+
+			if( data1 )
+			{
+				// Turn Right
+				speedL 		= speedOutside;
+				directionL	= data3 ? MOTOR_FORWARD : MOTOR_BACKWARD;
+
+				speedR 		= speedInside;
+				directionR	= data2 ? MOTOR_BACKWARD : MOTOR_FORWARD;
+			}
+			else
+			{
+				// Turn Left
+				speedL		= speedInside;
+				directionL	= data2 ? MOTOR_BACKWARD : MOTOR_FORWARD;
+
+				speedR 		= speedOutside;
+				directionR	= data3 ? MOTOR_FORWARD : MOTOR_BACKWARD;
+			}
+
+			// Don't allow robot to move forward when a bump sensor is currently triggered (robot is against a wall)
+			// Can only turn while against a wall if reversing
+			if( bumpStateSet() && ( directionL == MOTOR_FORWARD || directionR == MOTOR_FORWARD ) )
+			{
+				speedL = 0;
+				speedR = 0;
+			}
+
+			setMotorDutyCycle( LEFT_MOTOR,  speedL );
+			setMotorDutyCycle( RIGHT_MOTOR, speedR );
+
+			setMotorDirection( LEFT_MOTOR,  directionL );
+			setMotorDirection( RIGHT_MOTOR, directionR );
 		}
-
-		if( data3 )
+		else
 		{
-			setMotorDutyCycle( LEFT_MOTOR,  speed );
-			setMotorDutyCycle( RIGHT_MOTOR, speed );
-
-			setMotorDirection( LEFT_MOTOR,  MOTOR_BACKWARD );
-			setMotorDirection( RIGHT_MOTOR, MOTOR_FORWARD  );
-		}
-
-		if( !data1 && !data2 && !data3 )
-		{
+			// Doing nothing
 			setMotorDutyCycle( LEFT_MOTOR,  0 );
 			setMotorDutyCycle( RIGHT_MOTOR, 0 );
 
 			setMotorDirection( LEFT_MOTOR,  MOTOR_FORWARD );
 			setMotorDirection( RIGHT_MOTOR, MOTOR_FORWARD );
 		}
+	}
+	else
+	{
+		setMotorDutyCycle( LEFT_MOTOR,  0 );
+		setMotorDutyCycle( RIGHT_MOTOR, 0 );
+
+		setMotorDirection( LEFT_MOTOR,  MOTOR_FORWARD );
+		setMotorDirection( RIGHT_MOTOR, MOTOR_FORWARD );
 	}
 }
 
