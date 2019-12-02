@@ -20,13 +20,16 @@
 #define MOTOR_STOP		0
 #define MOTOR_BACKWARD	-1
 
+#define UPPER_BOUNDARY	70
+#define LOWER_BOUNDARY	30
+
 void initDevice_HFXT();
 void initADC14();
 void initHeartBeatLED();
 void initTimer();
 
 uint32_t clockMCLK, clockSMCLK, clockACLK;
-uint8_t currentLED = RED_LED, measureCount = 0;
+uint8_t currentLED = RED_LED;
 
 const char *terminalDisplayText =   "\r\nTI-RSLK MAX Motor Control Demo\r\n"
                                     "  C: Change LED Color, S: Change Direction, I: Increase DutyCycle,\r\n"
@@ -98,16 +101,13 @@ void initADC14()
 
 	//Configure P6.1 as A14 and P6.0 as A15
 	GPIO_setAsPeripheralModuleFunctionInputPin( GPIO_PORT_P6, GPIO_PIN0 | GPIO_PIN1, GPIO_TERTIARY_MODULE_FUNCTION );
-    GPIO_setAsPeripheralModuleFunctionInputPin( GPIO_PORT_P4, GPIO_PIN0 | GPIO_PIN2, GPIO_TERTIARY_MODULE_FUNCTION );
 
 	// Configure non-repeating multi-sequence memory storage in registers 0 and 1
-	ADC14_configureMultiSequenceMode( ADC_MEM0, ADC_MEM3, false );
+	ADC14_configureMultiSequenceMode( ADC_MEM0, ADC_MEM1, false );
 
 	// Store P6.1 (A14) reading in MEM0 and P6.0 (A15) reading in MEM1
 	ADC14_configureConversionMemory( ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A14, false );
 	ADC14_configureConversionMemory( ADC_MEM1, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A15, false );
-    ADC14_configureConversionMemory( ADC_MEM2, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A13, false );
-    ADC14_configureConversionMemory( ADC_MEM3, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A11, false );
 
     //See TechRef Section 20.2.6 for sample timing consideration.
     ADC14_enableSampleTimer( ADC_MANUAL_ITERATION );
@@ -120,6 +120,7 @@ void initHeartBeatLED()
 {
     GPIO_setAsOutputPin( GPIO_PORT_P2, GPIO_PIN0 | GPIO_PIN1 | GPIO_PIN2 );
     GPIO_setAsOutputPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );
+    GPIO_setAsInputPin( GPIO_PORT_P3, GPIO_PIN2 );
 }
 
 void initTimer()
@@ -151,9 +152,7 @@ void T32_INT2_IRQHandler()
 
 	// Throttle on P6.1 (A14, MEM0)
 	// Steering on P6.0 (A15, MEM1)
-	// Direction on P4.0 (A13, MEM2)
-	// Other direction P4.2 (A11, MEM3), but it's unused in calculation since it's just the opposite of P4.0
-	uint16_t dataInt[ 4 ] = { 0 };
+	uint16_t dataInt[ 2 ] = { 0 };
 	float dutyCycle, steering;
 
 	//Read from ADC.
@@ -166,46 +165,65 @@ void T32_INT2_IRQHandler()
 	dutyCycle = 100 * ( float ) dataInt[ 0 ] / 0x3FFF;
 	steering = 100 * ( float ) dataInt[ 1 ] / 0x3FFF;
 
-	uint8_t rightDC = ( int ) dutyCycle * ( steering >= 50 ? 1 : ( steering / ( 100 - steering ) ) );
-	uint8_t leftDC = ( int ) dutyCycle * ( steering <= 50 ? 1 : ( ( 100 - steering ) / steering ) );
+	// Reset everything. data0 | data1 | data2 | data3
+	GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );
 
-
-	// Used to show the duty cycle and steering ratio using potentiometers
-//    char str[ 100 ];
-//	snprintf( str, 100, "Duty Cycle = %i%%; Duty Cycle Ratio (L:R): %i%%: %i:%i; Forward: %i     \r", ( int ) dutyCycle, ( int )steering, leftDC, rightDC, dataInt[ 2 ] >= 16000 ? MOTOR_FORWARD : MOTOR_BACKWARD );
-//	uart0_transmitStr( str );
-
-	if( dutyCycle > 90 )
+	if( steering > UPPER_BOUNDARY )
 	{
-		GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN2 );
-		GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 | GPIO_PIN4 );
-//		uart0_transmitStr( "Go forward.                \r" );
+		// Turn Right
+		// Check if forward, reverse, or neither
+		if( dutyCycle > UPPER_BOUNDARY )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN3 );				// 1101
+		else if( dutyCycle < LOWER_BOUNDARY )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN4 );				// 1110
+		else
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN3 | GPIO_PIN4 );	// 1100
 	}
-	else if( dutyCycle < 10 )
+	else if( steering < LOWER_BOUNDARY )
 	{
-		GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN1 );
-		GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );
+		// Turn Right
+		// Check if forward, reverse, or neither
+		if( dutyCycle > UPPER_BOUNDARY )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN2 | GPIO_PIN3 );				// 1001
+		else if( dutyCycle < LOWER_BOUNDARY )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN2 | GPIO_PIN4 );				// 1010
+		else
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );	// 1000
+	}
+	else if( dutyCycle > UPPER_BOUNDARY )
+	{
+		if( dutyCycle < UPPER_BOUNDARY + ( ( 100 - UPPER_BOUNDARY ) / 4 ) )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );	// 0000
+		else if( dutyCycle < UPPER_BOUNDARY + ( ( 100 - UPPER_BOUNDARY ) / 2 ) )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN3 );				// 0001
+		else if( dutyCycle < UPPER_BOUNDARY + ( 3 * ( 100 - UPPER_BOUNDARY ) / 4 ) )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN4 );				// 0010
+		else
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 );							// 0011
+	}
+	else if( dutyCycle < LOWER_BOUNDARY )
+	{
+		if( dutyCycle > ( 3 * ( LOWER_BOUNDARY / 4 ) ) )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 | GPIO_PIN4 );				// 0100
+		else if( dutyCycle > ( LOWER_BOUNDARY / 2 ) )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 );							// 0101
+		else if( dutyCycle > ( LOWER_BOUNDARY / 4 ) )
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN4 );							// 0110
+		else
+			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 );										// 0111
+
+//		if( dutyCycle < ( LOWER_BOUNDARY / 4 ) )
+//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 | GPIO_PIN4 );				// 0100
+//		else if( dutyCycle < ( LOWER_BOUNDARY / 2 ) )
+//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 );							// 0101
+//		else if( dutyCycle < ( 3 * ( LOWER_BOUNDARY / 4 ) ) )
+//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN4 );							// 0110
+//		else
+//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 );										// 0111
 	}
 	else
 	{
-		GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );
-	}
-
-	if( steering > 90 )
-	{
-		GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN3 );
-		GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN4 );
-//		uart0_transmitStr( "Go right.                 \r" );
-	}
-	else if( steering < 10 )
-	{
-		GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN4 );
-		GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN3 );
-//		uart0_transmitStr( "Go left.                 \r" );
-	}
-	else
-	{
-		GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN3 | GPIO_PIN4 );
-//		uart0_transmitStr( "Go nowhere.              \r" );
+		// Set all data pins high
+		GPIO_setOutputHighOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN2 | GPIO_PIN3 | GPIO_PIN4 );
 	}
 }
