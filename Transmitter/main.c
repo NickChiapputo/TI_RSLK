@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include <stdint.h>  //Exact-width integer types
 #include <ti\devices\msp432p4xx\driverlib\driverlib.h>  // Driver library
-#include <uart.h>
 
 #define CLOCK_HF        48000000    // Hz
 #define CLOCK_LF        32000       // Hz
@@ -31,44 +30,19 @@ void initTimer();
 uint32_t clockMCLK, clockSMCLK, clockACLK;
 uint8_t currentLED = RED_LED;
 
-const char *terminalDisplayText =   "\r\nTI-RSLK MAX Motor Control Demo\r\n"
-                                    "  C: Change LED Color, S: Change Direction, I: Increase DutyCycle,\r\n"
-                                    "  D: Decrease DutyCycle, V: Display Speed, H: Help\r\n"
-                                    "> \r\n";
-
 void main(void)
 {
-    uint8_t data;
-
     initDevice_HFXT();
     initADC14();
     initHeartBeatLED();
-    initUART();
     initTimer();
 
     Interrupt_enableMaster();
     Timer32_startTimer( TIMER32_0_BASE, false );
 
-    //Initial display on terminal.
-    uart0_transmitStr( terminalDisplayText );
     Timer32_startTimer( TIMER32_1_BASE, false );
 
-    while(1)
-    {
-        if(UART_getInterruptStatus( EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG ) )
-        {
-            data = UART_receiveData( EUSCI_A0_BASE);
-            UART_clearInterruptFlag( EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG );
-
-            switch(data)
-            {
-                case 'H':
-                case 'h':
-                    uart0_transmitStr( terminalDisplayText );
-                    break;
-            } //end of switch
-        } //end of if
-    } //end of while
+    while(1);
 }
 
 void initDevice_HFXT()
@@ -211,15 +185,6 @@ void T32_INT2_IRQHandler()
 			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN4 );							// 0110
 		else
 			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 );										// 0111
-
-//		if( dutyCycle < ( LOWER_BOUNDARY / 4 ) )
-//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 | GPIO_PIN4 );				// 0100
-//		else if( dutyCycle < ( LOWER_BOUNDARY / 2 ) )
-//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN3 );							// 0101
-//		else if( dutyCycle < ( 3 * ( LOWER_BOUNDARY / 4 ) ) )
-//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 | GPIO_PIN4 );							// 0110
-//		else
-//			GPIO_setOutputLowOnPin( GPIO_PORT_P4, GPIO_PIN1 );										// 0111
 	}
 	else
 	{
